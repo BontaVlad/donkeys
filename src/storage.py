@@ -4,7 +4,7 @@ from elasticsearch_dsl import (DocType, Date, Integer, Float, Keyword, Boolean,
 from elasticsearch_dsl.connections import connections
 
 
-connections.create_connection(hosts=['localhosts'])
+connections.create_connection(hosts=['localhost'])
 
 html_strip = analyzer(
     'html_strip', tokenizer="standard",
@@ -17,20 +17,23 @@ class Record(DocType):
     url = Text()
     title = Text(fields={'raw': Keyword()})
     address = Text(fields={'raw': Keyword()})
-    location = GeoPoint(lat_lon=True)
+    location = GeoPoint()
     contract_type = Keyword()
     description = Text(analyzer=html_strip)
     extra = Text(analyzer=html_strip)
     building_type = Text(fields={'raw': Keyword()})
     structure_materials = Text(fields={'raw': Keyword()})
     agency_broker = Text(fields={'raw': Keyword()})
+    compartiment = Keyword()
     num_of_rooms = Integer()
     num_of_kitchens = Integer()
     num_of_bathrooms = Integer()
     built_year = Integer()
-    build_surface_area = Float()
-    usable_surface_area = Float()
+    floor = Keyword()
+    build_surface_area = Integer()
+    usable_surface_area = Integer()
     price = Integer()
+    height_category = Keyword()
     currency = Keyword()
     created_at = Date()
     added_at = Date()
