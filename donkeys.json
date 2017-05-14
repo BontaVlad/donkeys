@@ -1,0 +1,26 @@
+[
+    {
+        "domain": "imobiliare.ro",
+        "scraper": "imobiliare_ro.py",
+        "req_delay": 30,
+        "conn_num": 1
+    },
+    {
+        "domain": "storia.ro",
+        "scraper": "storia.py",
+        "req_delay": 10,
+        "conn_num": 1
+    },
+    {
+        "domain": "homezz.ro",
+        "scraper": "homezz.py",
+        "req_delay": 20,
+        "conn_num": 1
+    },
+    {
+        "domain": "olx.ro",
+        "scraper": "olx.py",
+        "req_delay": 50,
+        "conn_num": 1
+    }
+]
