@@ -8,7 +8,7 @@
     {
         "domain": "storia.ro",
         "scraper": "storia.py",
-        "req_delay": 10,
+        "req_delay": 5,
         "conn_num": 1
     },
     {

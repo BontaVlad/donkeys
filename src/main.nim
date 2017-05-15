@@ -14,6 +14,10 @@ import redis as r
 
 import constants
 
+# register loggers
+addLogger stdout
+addLogger open("donkeys.log", fmWrite)
+
 {.experimental.}  # required by parallel
 
 let redis = open()
@@ -25,7 +29,6 @@ var bf = initialize_bloom_filter(capacity = 100000, error_rate = 0.001)
 
 let
   pool_size = 50  # thread pool size
-  requests_delay = 5  # seconds between req on the same domain
 
 type
   Donkey = tuple[domain: string, scraper: string, conn_num: int, req_delay: int]  # worker
@@ -35,40 +38,49 @@ proc newDonkey(domain, scraper: string, conn_num=20, req_delay=10): Donkey =
   result = (domain, scraper, conn_num, req_delay)
 
 proc loadDonkeys(filename: string): Table[string, Donkey] =
+  log "Loading donkeys"
   let js = parseFile(filename)
   var donkey: Donkey
   result = initTable[string, Donkey]()
   for d in js:
     donkey = newDonkey(domain=d["domain"].str, scraper=d["scraper"].str)
+    log "loaded donkey: ", donkey
     if d.hasKey("conn_num"):
       donkey.conn_num = d["conn_num"].num.int
     if d.hasKey("req_delay"):
-      donkey.req_delay = d["req_delay"].num.int * 1000
+      donkey.req_delay = d["req_delay"].num.int
     result.add(donkey.domain, donkey)
 
 var donkeys = loadDonkeys("donkeys.json")
 
-proc get_candidate: Candidate =
+template taint(donkey: Donkey) =
+  log "Marking: ", donkey.domain, "time: ", epochTime().to_int() + donkey.req_delay
+  discard redis.zadd($Keys.timetable, epochTime().to_int + donkey.req_delay, donkey.domain)
+
+proc get_candidate: Candidate {.inline.}=
   log "Getting a new candidate"
   # get next domain to be scrapped
   var data = redis.zrange($Keys.timetable, "0", "-1", true)
   # if redis is empty, populate it with registered donkeys, and the current time
   if data.len == 0:
-    for d in donkeys.keys:
-      discard redis.zadd($Keys.timetable, epochTime().to_int, d)
+    for d in donkeys.values:
+      taint(d)
     data = redis.zrange($Keys.timetable, "0", "-1", true)
   let
     domain = data[0]
     delta = epochTime().to_int - data[1].parseInt
+  log "epoch: ", epochTime().to_int
+  log "donkey: ", data[1].parseInt
+  log "delta: ", delta
 
   result.domain = domain
 
-  if delta > requests_delay:
+  if delta > 0:
     # can be scrapped
     result.wait = 0
   else:
-    # x * 1000 because we need milliseconds
-    result.wait = (requests_delay - delta) * 1000
+    result.wait = abs(delta) * 1000
+
 
 proc mark(urls: seq[string]) =
   # mark urls as seen
@@ -103,14 +115,12 @@ proc do_work(donkey: Donkey, url: string) {.gcsafe.}=
   # log "Finished python process with errC: ", $errC
 
 proc main =
-  # register loggers
-  addLogger stdout
-  addLogger open("donkeys.log", fmWrite)
-
   setMaxPoolSize(pool_size)
 
   var donkey: Donkey
   var candidate: Candidate
+
+  log donkeys
 
   while true:
     candidate = get_candidate()
@@ -123,9 +133,6 @@ proc main =
       quit()
 
     if candidate.wait > 0:
-      # if donkey.req_delay > candidate.wait:
-      #   log "continue"
-      #   continue
       log "Sleeping for $#" % $candidate.wait, " ", candidate.domain
       sleep(candidate.wait)
 
@@ -142,8 +149,7 @@ proc main =
         log $donkey.domain, " ", $epochTime().to_int
         spawn do_work(donkey, url)
       # mark the urls as scrapped
-    log "Marking: ", donkey.domain
-    discard redis.zadd($Keys.timetable, epochTime().to_int, donkey.domain)
+    taint(donkey)
     mark(urls)
 
 when isMainModule:
